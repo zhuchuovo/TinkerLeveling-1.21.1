@@ -1,0 +1,34 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[mods]]
+modId="tinkerleveling"
+version="1.21.1-0.5.1"
+displayName="Tinker Leveling"
+authors="embeddedt"
+description='''
+A rewrite of Tinkers Tool Leveling for modern Minecraft versions.
+'''
+
+[[dependencies.tinkerleveling]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.0,21.2.0)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.tinkerleveling]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.21.2)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.tinkerleveling]]
+modId="tconstruct"
+type="required"
+versionRange="[3.12.5,)"
+ordering="AFTER"
+side="BOTH"
+

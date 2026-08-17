@@ -1,0 +1,14 @@
+#Maximum achievable level. If set to 0 there is no upper limit.
+# Default: 0
+# Range: > 0
+maximumLevels = 0
+#How much the XP cost multiplies per level (minimum 2).
+# Default: 2.0
+# Range: 2.0 ~ 1.7976931348623157E308
+levelMultiplier = 2.0
+#Base XP used when no more specific entry is present for the tool.
+# Default: 500
+# Range: > 1
+defaultBaseXP = 500
+#Allow any damage to the player to count towards armor XP, not just mob damage.
+allowArmorExploits = false
