@@ -35,7 +35,12 @@ public final class ToolHelper {
                 ToolStack candidate = ToolStack.from(stack);
                 if (candidate.getPersistentData().contains(ModToolLeveling.UUID_KEY, Tag.TAG_INT_ARRAY)
                         && sourceId.equals(NbtUtils.loadUUID(candidate.getPersistentData().get(ModToolLeveling.UUID_KEY)))) {
-                    source.updateStack(stack);
+                    // Keep the source and inventory stack backed by the same NBT instance. Experience
+                    // is awarded from modifier hooks that may run before Tinkers' Construct applies
+                    // the tool's durability damage. The default updateStack call copies the NBT and
+                    // leaves the active ToolStack pointing at the old compound, so the subsequent
+                    // damage is written to a detached object and the item appears indestructible.
+                    source.updateStack(stack, false);
                     inventory.setChanged();
                     return true;
                 }
