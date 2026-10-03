@@ -1,0 +1,16 @@
+{
+  "priority": 10,
+  "max_level": 20,
+  "slots": [
+    {
+      "levels": { "min": 1 },
+      "mode": "grant",
+      "slots": ["upgrades"]
+    },
+    {
+      "levels": { "min": 10 },
+      "mode": "choose",
+      "slots": ["abilities", "upgrades"]
+    }
+  ]
+}

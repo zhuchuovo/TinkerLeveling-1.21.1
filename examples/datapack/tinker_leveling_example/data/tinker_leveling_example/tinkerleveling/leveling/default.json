@@ -1,0 +1,15 @@
+{
+  "priority": -100,
+  "xp": {
+    "base": 500,
+    "multiplier": 2.0
+  },
+  "max_level": 20,
+  "slots": [
+    {
+      "levels": { "min": 1 },
+      "mode": "grant",
+      "slots": ["upgrades"]
+    }
+  ]
+}

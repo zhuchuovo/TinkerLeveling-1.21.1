@@ -2,6 +2,17 @@
 
 This branch ports Tinker Leveling to the local NeoForge 1.21.1 Tinkers' Construct codebase.
 
+## Data packs
+
+Levels and slots are configured through data packs, under `data/<namespace>/tinkerleveling/leveling/*.json`.
+A rule can target a subset of tools and controls the XP curve, the level cap, and which slots are handed out at which
+levels, including letting the player pick the slot type themselves.
+
+- Start with the example pack in `examples/datapack/tinker_leveling_example/`.
+- Full field reference, predicate syntax, and a worked example: `docs/数据包指南.md`.
+- With no data pack installed the mod keeps the legacy behaviour: one upgrade slot per level, XP curve from the server config.
+- `/reload` applies data pack changes without restarting.
+
 ## Versions
 
 - Minecraft 1.21.1

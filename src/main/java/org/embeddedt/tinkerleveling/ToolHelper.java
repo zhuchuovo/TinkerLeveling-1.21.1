@@ -23,6 +23,31 @@ public final class ToolHelper {
                 && firstTool.getMaterials().equals(secondTool.getMaterials());
     }
 
+    /** Reads the leveling UUID out of a tool, or null when the stack is not a levelling tool */
+    public static UUID getToolId(ItemStack stack) {
+        if (!(stack.getItem() instanceof IModifiable)) {
+            return null;
+        }
+        ToolStack tool = ToolStack.from(stack);
+        if (!tool.getPersistentData().contains(ModToolLeveling.UUID_KEY, Tag.TAG_INT_ARRAY)) {
+            return null;
+        }
+        return NbtUtils.loadUUID(tool.getPersistentData().get(ModToolLeveling.UUID_KEY));
+    }
+
+    /** Finds the inventory stack levelling the tool with the given UUID, or an empty stack when the player has none */
+    public static ItemStack findByUUID(Player player, UUID toolId) {
+        Inventory inventory = player.getInventory();
+        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+            ItemStack stack = inventory.getItem(slot);
+            UUID candidate = getToolId(stack);
+            if (candidate != null && candidate.equals(toolId)) {
+                return stack;
+            }
+        }
+        return ItemStack.EMPTY;
+    }
+
     public static boolean syncToPlayerInventory(ToolStack source, Player player) {
         if (!source.getPersistentData().contains(ModToolLeveling.UUID_KEY, Tag.TAG_INT_ARRAY)) {
             return false;

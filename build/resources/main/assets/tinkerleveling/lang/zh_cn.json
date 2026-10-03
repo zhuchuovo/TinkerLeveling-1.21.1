@@ -1,7 +1,13 @@
 {
   "tooltip.tinkerleveling.level": "等级",
   "tooltip.tinkerleveling.xp": "经验",
+  "tooltip.tinkerleveling.source": "规则",
   "message.tinkerleveling.tool": "工具",
+
+  "screen.tinkerleveling.choose_slot": "升级奖励",
+  "screen.tinkerleveling.tool": "工具：%s",
+  "screen.tinkerleveling.hint": "还有 %s 个槽位待分配——点击其中一项来领取",
+  "screen.tinkerleveling.later": "稍后再选",
 
   "tooltip.tinkerleveling.level.0": "全新",
   "tooltip.tinkerleveling.level.1": "笨拙",

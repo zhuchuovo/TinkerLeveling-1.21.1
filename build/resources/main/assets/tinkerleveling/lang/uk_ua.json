@@ -1,7 +1,13 @@
 {
   "tooltip.tinkerleveling.level": "Рівень",
   "tooltip.tinkerleveling.xp": "XP",
+  "tooltip.tinkerleveling.source": "Правило",
   "message.tinkerleveling.tool": "інструмент",
+
+  "screen.tinkerleveling.choose_slot": "Нагорода за рівень",
+  "screen.tinkerleveling.tool": "Інструмент: %s",
+  "screen.tinkerleveling.hint": "Залишилось розподілити слотів: %s - натисніть, щоб отримати",
+  "screen.tinkerleveling.later": "Вирішити пізніше",
 
   "tooltip.tinkerleveling.level.0": "Немов немовля",
   "tooltip.tinkerleveling.level.1": "Незграбний",

@@ -21,6 +21,9 @@ import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
 import org.embeddedt.tinkerleveling.capability.DamageXp;
+import org.embeddedt.tinkerleveling.data.LevelingRules;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import slimeknights.tconstruct.common.TinkerTags;
 import slimeknights.tconstruct.library.modifiers.util.ModifierDeferredRegister;
 import slimeknights.tconstruct.library.modifiers.util.StaticModifier;
@@ -32,6 +35,7 @@ import java.util.function.Supplier;
 @Mod(TinkerLeveling.MODID)
 public final class TinkerLeveling {
     public static final String MODID = "tinkerleveling";
+    public static final Logger LOG = LoggerFactory.getLogger("Tinker Leveling");
 
     private static final ModifierDeferredRegister MODIFIERS = ModifierDeferredRegister.create(MODID);
     private static final DeferredRegister<SoundEvent> SOUND_EVENTS = DeferredRegister.create(Registries.SOUND_EVENT, MODID);
@@ -66,6 +70,8 @@ public final class TinkerLeveling {
         ATTACHMENT_TYPES.register(modBus);
         modBus.addListener(TinkerPacketHandler::register);
         container.registerConfig(ModConfig.Type.SERVER, TinkerConfig.SERVER_CONFIG);
+
+        LevelingRules.INSTANCE.init();
 
         NeoForge.EVENT_BUS.addListener(this::onDeath);
         NeoForge.EVENT_BUS.addListener(this::onPlayerTick);

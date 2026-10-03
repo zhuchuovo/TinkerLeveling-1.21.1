@@ -1,7 +1,13 @@
 {
   "tooltip.tinkerleveling.level": "Level",
   "tooltip.tinkerleveling.xp": "XP",
+  "tooltip.tinkerleveling.source": "Rule",
   "message.tinkerleveling.tool": "tool",
+
+  "screen.tinkerleveling.choose_slot": "Level Up Reward",
+  "screen.tinkerleveling.tool": "Tool: %s",
+  "screen.tinkerleveling.hint": "%s slot(s) left to assign - click one to claim it",
+  "screen.tinkerleveling.later": "Decide later",
 
   "tooltip.tinkerleveling.level.0": "Like new",
   "tooltip.tinkerleveling.level.1": "Clumsy",

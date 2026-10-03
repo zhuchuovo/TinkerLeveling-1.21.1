@@ -1,0 +1,5 @@
+{
+  "priority": 50,
+  "tool": { "type": "tconstruct:has_material", "material": "tconstruct:wood" },
+  "xp": { "base": 150 }
+}

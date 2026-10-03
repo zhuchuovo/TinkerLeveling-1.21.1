@@ -1,0 +1,16 @@
+{
+  "tool": { "tag": "tconstruct:modifiable/ranged" },
+  "xp": { "base": 800, "multiplier": 1.9 },
+  "slots": [
+    {
+      "levels": { "min": 1, "max": 4 },
+      "mode": "grant",
+      "slots": ["upgrades", "upgrades", "upgrades"]
+    },
+    {
+      "levels": { "min": 5, "max": 9 },
+      "mode": "grant",
+      "slots": ["abilities", "upgrades"]
+    }
+  ]
+}

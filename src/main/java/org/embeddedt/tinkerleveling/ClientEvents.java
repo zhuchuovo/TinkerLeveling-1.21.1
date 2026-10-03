@@ -1,5 +1,6 @@
 package org.embeddedt.tinkerleveling;
 
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -7,6 +8,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
+import org.embeddedt.tinkerleveling.data.LevelingRules;
 import slimeknights.tconstruct.common.TinkerTags;
 import slimeknights.tconstruct.library.tools.nbt.ModDataNBT;
 import slimeknights.tconstruct.library.tools.nbt.ToolStack;
@@ -33,7 +35,17 @@ public final class ClientEvents {
             int insertAt = Math.min(1, tooltips.size());
             tooltips.add(insertAt, Component.translatable("tooltip.tinkerleveling.xp")
                     .append(": ")
-                    .append(Component.literal(xp + " / " + ModToolLeveling.getXpForLevelup(level, stack.getItem()))));
+                    .append(Component.literal(xp + " / " + ModToolLeveling.getXpForLevelup(level, tool))));
+            if (TinkerConfig.showDatapackSource.get()) {
+                LevelingRules.LevelingRule rule = ModToolLeveling.getRule(tool);
+                String source = rule.isConfigDefault()
+                        ? "config"
+                        : rule.id().toString();
+                tooltips.add(insertAt, Component.translatable("tooltip.tinkerleveling.source")
+                        .append(": ")
+                        .append(Component.literal(source))
+                        .withStyle(ChatFormatting.DARK_GRAY));
+            }
             tooltips.add(insertAt, getLevelTooltip(level));
         }
     }

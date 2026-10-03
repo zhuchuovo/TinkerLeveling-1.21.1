@@ -2,10 +2,12 @@ package org.embeddedt.tinkerleveling;
 
 import com.mojang.datafixers.util.Pair;
 import net.minecraft.core.Holder;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
@@ -15,10 +17,14 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.entity.projectile.Projectile;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.phys.EntityHitResult;
+import org.embeddedt.tinkerleveling.data.LevelingRules;
+import org.embeddedt.tinkerleveling.data.LevelingRules.LevelingRule;
+import org.embeddedt.tinkerleveling.data.LevelingRules.SlotGrant;
+import org.embeddedt.tinkerleveling.data.LevelingRules.SlotGrantResult;
+import org.embeddedt.tinkerleveling.data.SlotTypeLoadable;
 import org.jetbrains.annotations.Nullable;
 import slimeknights.tconstruct.common.SoundUtils;
 import slimeknights.tconstruct.library.modifiers.Modifier;
@@ -54,6 +60,9 @@ import slimeknights.tconstruct.library.tools.stat.ToolStats;
 import slimeknights.tconstruct.library.utils.RestrictedCompoundTag;
 import slimeknights.tconstruct.tools.data.ModifierIds;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.WeakHashMap;
@@ -65,9 +74,14 @@ public final class ModToolLeveling extends Modifier implements BlockBreakModifie
         ProjectileHitModifierHook, ProjectileLaunchModifierHook {
 
     public static final ResourceLocation XP_KEY = TinkerLeveling.id("xp");
-    public static final ResourceLocation BONUS_MODIFIERS_KEY = TinkerLeveling.id("bonus_modifiers");
     public static final ResourceLocation LEVEL_KEY = TinkerLeveling.id("level");
     public static final ResourceLocation UUID_KEY = TinkerLeveling.id("uuid");
+    /** Slots earned from leveling, stored as a compound of slot type name to count */
+    public static final ResourceLocation BONUS_SLOTS_KEY = TinkerLeveling.id("bonus_slots");
+    /** Slots the player still has to assign, stored the same way as {@link #BONUS_SLOTS_KEY} */
+    public static final ResourceLocation PENDING_SLOTS_KEY = TinkerLeveling.id("pending_slots");
+    /** Legacy key from before data packs, migrated into {@link #BONUS_SLOTS_KEY} on load */
+    private static final ResourceLocation LEGACY_BONUS_MODIFIERS_KEY = TinkerLeveling.id("bonus_modifiers");
 
     private static final WeakHashMap<Projectile, Pair<ItemStack, Integer>> LAUNCH_INFO_MAP = new WeakHashMap<>();
 
@@ -87,29 +101,36 @@ public final class ModToolLeveling extends Modifier implements BlockBreakModifie
 
     @Override
     public void addVolatileData(IToolContext context, ModifierEntry entry, ToolDataNBT volatileData) {
-        int bonusModifiers = context.getPersistentData().getInt(BONUS_MODIFIERS_KEY);
-        int abilitySlots = bonusModifiers / 2;
-        volatileData.addSlots(SlotType.ABILITY, abilitySlots);
-        volatileData.addSlots(SlotType.UPGRADE, bonusModifiers - abilitySlots);
+        CompoundTag granted = context.getPersistentData().getCompound(BONUS_SLOTS_KEY);
+        for (String slotName : granted.getAllKeys()) {
+            int count = granted.getInt(slotName);
+            if (count > 0) {
+                volatileData.addSlots(SlotType.getOrCreate(slotName), count);
+            }
+        }
     }
 
     @Override
     public Component onRemoved(IToolStackView tool, Modifier modifier) {
         tool.getPersistentData().remove(XP_KEY);
-        tool.getPersistentData().remove(BONUS_MODIFIERS_KEY);
         tool.getPersistentData().remove(LEVEL_KEY);
         tool.getPersistentData().remove(UUID_KEY);
+        tool.getPersistentData().remove(BONUS_SLOTS_KEY);
+        tool.getPersistentData().remove(PENDING_SLOTS_KEY);
+        tool.getPersistentData().remove(LEGACY_BONUS_MODIFIERS_KEY);
         return null;
     }
 
     @Override
     public void addRawData(IToolStackView tool, ModifierEntry entry, RestrictedCompoundTag tag) {
-        if (!tool.getPersistentData().contains(UUID_KEY, Tag.TAG_INT_ARRAY)) {
-            tool.getPersistentData().put(UUID_KEY, NbtUtils.createUUID(UUID.randomUUID()));
+        ModDataNBT persistent = tool.getPersistentData();
+        if (!persistent.contains(UUID_KEY, Tag.TAG_INT_ARRAY)) {
+            persistent.put(UUID_KEY, NbtUtils.createUUID(UUID.randomUUID()));
         }
-        if (tool.getPersistentData().getInt(LEVEL_KEY) <= 0) {
-            tool.getPersistentData().putInt(LEVEL_KEY, 1);
+        if (persistent.getInt(LEVEL_KEY) <= 0) {
+            persistent.putInt(LEVEL_KEY, 1);
         }
+        migrateLegacySlots(persistent);
     }
 
     @Override
@@ -118,44 +139,219 @@ public final class ModToolLeveling extends Modifier implements BlockBreakModifie
         tool.getPersistentData().remove(LEVEL_KEY);
     }
 
-    public static int getXpForLevelup(int level, Item item) {
-        int normalizedLevel = Math.max(1, level);
-        double required = TinkerConfig.getBaseXpForTool(item)
-                * Math.pow(TinkerConfig.levelMultiplier.get(), normalizedLevel - 1.0);
-        return required >= Integer.MAX_VALUE ? Integer.MAX_VALUE : Math.max(1, (int) required);
+    /**
+     * Moves the pre data pack bonus modifier counter into per slot type storage. That counter used to split into
+     * {@code abilities = n / 2} and {@code upgrades = n - n / 2}, so the migration keeps the exact same slot counts.
+     */
+    private static void migrateLegacySlots(ModDataNBT persistent) {
+        int legacy = persistent.getInt(LEGACY_BONUS_MODIFIERS_KEY);
+        if (legacy <= 0) {
+            return;
+        }
+        persistent.remove(LEGACY_BONUS_MODIFIERS_KEY);
+        CompoundTag granted = persistent.getCompound(BONUS_SLOTS_KEY).copy();
+        int abilities = legacy / 2;
+        addToCompound(granted, SlotType.ABILITY, abilities);
+        addToCompound(granted, SlotType.UPGRADE, legacy - abilities);
+        persistent.put(BONUS_SLOTS_KEY, granted);
+    }
+
+    /** Adds {@code amount} to a counter inside a compound, dropping the entry when the total is zero */
+    private static void addToCompound(CompoundTag compound, SlotType type, int amount) {
+        String name = SlotTypeLoadable.nameOf(type);
+        int updated = compound.getInt(name) + amount;
+        if (updated <= 0) {
+            compound.remove(name);
+        } else {
+            compound.putInt(name, updated);
+        }
+    }
+
+    /** Reads a counter compound into a map, skipping non positive entries */
+    private static Map<SlotType,Integer> readCounters(IModDataView data, ResourceLocation key) {
+        Map<SlotType,Integer> counts = new LinkedHashMap<>();
+        CompoundTag compound = data.getCompound(key);
+        for (String name : compound.getAllKeys()) {
+            int count = compound.getInt(name);
+            if (count > 0) {
+                counts.put(SlotType.getOrCreate(name), count);
+            }
+        }
+        return counts;
+    }
+
+    /** Writes a counter map back into persistent data, or removes the key when everything is spent */
+    private static void writeCounters(ModDataNBT data, ResourceLocation key, Map<SlotType,Integer> counts) {
+        CompoundTag compound = new CompoundTag();
+        counts.forEach((type, count) -> {
+            if (count > 0) {
+                compound.putInt(SlotTypeLoadable.nameOf(type), count);
+            }
+        });
+        if (compound.isEmpty()) {
+            data.remove(key);
+        } else {
+            data.put(key, compound);
+        }
+    }
+
+    /** Slots the player has not assigned yet */
+    public static Map<SlotType,Integer> getPendingSlots(IToolStackView tool) {
+        return readCounters(tool.getPersistentData(), PENDING_SLOTS_KEY);
+    }
+
+    /** Rule currently driving this tool, resolved from the loaded data packs */
+    public static LevelingRule getRule(IToolStackView tool) {
+        return LevelingRules.INSTANCE.getRule(tool);
+    }
+
+    /** Experience needed to advance from {@code level} to {@code level + 1} for this specific tool */
+    public static int getXpForLevelup(int level, IToolStackView tool) {
+        return getRule(tool).xpForLevel(level);
     }
 
     public void addXp(IToolStackView tool, int amount, Player player) {
         if (amount <= 0 || player.level().isClientSide) {
             return;
         }
+        if (!(tool instanceof ToolStack toolStack)) {
+            throw new IllegalStateException("Unable to rebuild a non-ToolStack leveling tool");
+        }
         ModDataNBT levelData = tool.getPersistentData();
         int level = Math.max(1, levelData.getInt(LEVEL_KEY));
-        if (!TinkerConfig.canLevelUp(level)) {
+        LevelingRule rule = getRule(tool);
+        if (!rule.canLevelUp(level)) {
+            return;
+        }
+        // the player decides where the next slots go, so stop earning levels until that is settled
+        if (!getPendingSlots(tool).isEmpty()) {
             return;
         }
 
         long updatedXp = (long) levelData.getInt(XP_KEY) + amount;
         levelData.putInt(XP_KEY, (int) Math.min(Integer.MAX_VALUE, updatedXp));
-        int requiredXp = getXpForLevelup(level, tool.getItem());
+        int requiredXp = rule.xpForLevel(level);
         if (levelData.getInt(XP_KEY) < requiredXp) {
-            if (tool instanceof ToolStack toolStack) {
-                ToolHelper.syncToPlayerInventory(toolStack, player);
-            }
+            ToolHelper.syncToPlayerInventory(toolStack, player);
             return;
         }
 
+        int newLevel = level + 1;
         levelData.putInt(XP_KEY, levelData.getInt(XP_KEY) - requiredXp);
-        levelData.putInt(LEVEL_KEY, level + 1);
-        levelData.putInt(BONUS_MODIFIERS_KEY, levelData.getInt(BONUS_MODIFIERS_KEY) + 1);
+        levelData.putInt(LEVEL_KEY, newLevel);
 
         SoundUtils.playSoundForAll(player, TinkerLeveling.SOUND_LEVELUP.get(), 1.0f, 1.0f);
-        TinkerPacketHandler.sendLevelUp(level + 1, player);
-        if (tool instanceof ToolStack toolStack) {
-            toolStack.rebuildStats();
-            ToolHelper.syncToPlayerInventory(toolStack, player);
-        } else {
-            throw new IllegalStateException("Unable to rebuild a non-ToolStack leveling tool");
+        TinkerPacketHandler.sendLevelUp(newLevel, toolStack.getItem().getDescriptionId(), player);
+        grantSlots(toolStack, rule, newLevel, player);
+
+        if (TinkerConfig.debugLogging.get()) {
+            TinkerLeveling.LOG.info("{} reached level {} using rule {}{}", toolStack.getItem(), newLevel,
+                    rule.isConfigDefault() ? "config defaults" : rule.id(),
+                    getPendingSlots(toolStack).isEmpty() ? "" : " (slot choice pending)");
+        }
+
+        toolStack.rebuildStats();
+        ToolHelper.syncToPlayerInventory(toolStack, player);
+    }
+
+    /**
+     * Hands out the slots configured for the reached level. Grants in {@code CHOOSE} mode are queued instead, so the
+     * player can pick later.
+     */
+    private void grantSlots(ToolStack tool, LevelingRule rule, int level, Player player) {
+        SlotGrantResult result = LevelingRules.grantsFor(rule, level);
+        if (result.isEmpty()) {
+            return;
+        }
+        ModDataNBT data = tool.getPersistentData();
+        Map<SlotType,Integer> granted = readCounters(data, BONUS_SLOTS_KEY);
+        Map<SlotType,Integer> pending = readCounters(data, PENDING_SLOTS_KEY);
+
+        for (SlotGrant grant : result.grants()) {
+            if (grant.needsChoice()) {
+                // every option stays queued until the player picks one
+                for (SlotType type : grant.slotTypes()) {
+                    pending.merge(type, 1, Integer::sum);
+                }
+            } else {
+                for (SlotType type : grant.slotTypes()) {
+                    granted.merge(type, 1, Integer::sum);
+                }
+            }
+        }
+        writeCounters(data, BONUS_SLOTS_KEY, granted);
+        writeCounters(data, PENDING_SLOTS_KEY, pending);
+        resolvePending(tool, level, player);
+    }
+
+    /**
+     * Either hands the queued slots over directly, or asks the player to pick.
+     * <p>
+     * Only one option is ever left to pick between once the others have been resolved, and a lone option is not a
+     * choice, so in that case it is granted outright rather than confirmed. Loops because handing over the last option
+     * cannot free up another one, but the guard keeps that guarantee explicit.
+     */
+    private void resolvePending(ToolStack tool, int level, Player player) {
+        for (int guard = 0; guard < MAX_PENDING_TYPES; guard++) {
+            Map<SlotType,Integer> pending = getPendingSlots(tool);
+            if (pending.size() != 1) {
+                break;
+            }
+            applySlotChoice(tool, pending.keySet().iterator().next(), player, false);
+        }
+        sendPendingChoice(tool, level, player);
+    }
+
+    /** Maximum distinct slot types one level up can queue, used as a loop guard */
+    private static final int MAX_PENDING_TYPES = 16;
+
+    /** Tells the client which slot types are still waiting to be assigned */
+    private void sendPendingChoice(ToolStack tool, int level, Player player) {
+        if (!(player instanceof ServerPlayer)) {
+            return;
+        }
+        Map<SlotType,Integer> pending = getPendingSlots(tool);
+        UUID toolId = NbtUtils.loadUUID(tool.getPersistentData().get(UUID_KEY));
+        List<TinkerPacketHandler.SlotChoice> choices = new ArrayList<>(pending.size());
+        for (Map.Entry<SlotType,Integer> entry : pending.entrySet()) {
+            choices.add(new TinkerPacketHandler.SlotChoice(SlotTypeLoadable.nameOf(entry.getKey()), entry.getValue()));
+        }
+        TinkerPacketHandler.sendSlotChoice(toolId, level, tool.getItem().getDescriptionId(), choices, player);
+    }
+
+    /** Entry point for the network handler once the server validated a client choice */
+    public void applySlotChoice(ToolStack tool, SlotType type, Player player) {
+        applySlotChoice(tool, type, player, true);
+    }
+
+    /**
+     * Applies one queued slot choice.
+     * <p>
+     * The reward for a level is a single choice, so the option the player picked is granted and the alternatives it was
+     * offered against are dropped.
+     * @param resolve  Whether to continue resolving the queue, false when called from {@link #resolvePending}
+     */
+    private void applySlotChoice(ToolStack tool, SlotType type, Player player, boolean resolve) {
+        ModDataNBT data = tool.getPersistentData();
+        Map<SlotType,Integer> pending = readCounters(data, PENDING_SLOTS_KEY);
+        int available = pending.getOrDefault(type, 0);
+        if (available <= 0) {
+            return;
+        }
+        // the pick consumes the other options it was offered against
+        pending.clear();
+        if (available > 1) {
+            pending.put(type, available - 1);
+        }
+        Map<SlotType,Integer> granted = readCounters(data, BONUS_SLOTS_KEY);
+        granted.merge(type, 1, Integer::sum);
+        writeCounters(data, BONUS_SLOTS_KEY, granted);
+        writeCounters(data, PENDING_SLOTS_KEY, pending);
+
+        tool.rebuildStats();
+        ToolHelper.syncToPlayerInventory(tool, player);
+        if (resolve) {
+            resolvePending(tool, Math.max(1, data.getInt(LEVEL_KEY)), player);
         }
     }
 

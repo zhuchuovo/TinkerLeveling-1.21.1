@@ -3,6 +3,6 @@ Specification-Title: Tinker Leveling
 Specification-Vendor: embeddedt
 Specification-Version: 1
 Implementation-Title: tinkerleveling
-Implementation-Version: 1.21.1-0.5.1
+Implementation-Version: 1.21.1-0.6.0
 Implementation-Vendor: embeddedt
 

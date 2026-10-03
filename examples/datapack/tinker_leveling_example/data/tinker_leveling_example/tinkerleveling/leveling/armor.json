@@ -1,0 +1,10 @@
+{
+  "tool": { "tag": "tconstruct:modifiable/armor" },
+  "slots": [
+    {
+      "levels": { "min": 1 },
+      "mode": "grant",
+      "slots": ["defense"]
+    }
+  ]
+}
